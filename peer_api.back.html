@@ -1,0 +1,276 @@
+<?php
+/*ajax queries */
+require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
+require_once(dirname(__FILE__).'/lib.php');
+require_once($CFG->libdir.'/gradelib.php');
+$dbconnect = mysql_connect($CFG->dbhost, $CFG->dbuser, $CFG->dbpass) or die('unable to connect to sql server');
+$dbselect  = mysql_select_db($CFG->dbname) or die('unable to select the moodle database');
+
+ 
+if(isset($_GET['method'])){
+    $postvars=$_GET; 
+  
+  
+  $_GET['method']($postvars,$USER,$CFG);
+
+}
+function save_peer($postvars,$USER,$CFG){
+  
+  $name=$postvars['peer_name'];
+  $cmid=$postvars['cm_id'];
+  $userid=$postvars['user_id'];
+  $googleurl=$postvars['google_url'];
+     $check="select * from peer_reviews where user_id=$userid and cm_id=$cmid ";
+     $runcheck=mysql_query($check);
+     if(mysql_num_rows($runcheck)>0)
+     {
+      $response="Sorry you have already submitted for this course";
+
+     }
+     else
+     {
+      $qry="insert into peer_reviews (name,user_id,cm_id,google_url) values ('$name',$userid,$cmid,'$googleurl')";
+        if(mysql_query($qry)){
+          $response="your review has been sumitted";
+               /* enter the submitted peer to rf0 */
+               $rfr0_peerid=mysql_insert_id();
+             $q_pr0="insert into rfr0 (peer_id,userid,cmid,url) values ($rfr0_peerid,$userid,$cmid,'$googleurl') ";
+             mysql_query($q_pr0);
+               
+
+        }
+         }
+    echo $response;
+}
+
+function request_peer($postvars,$USER,$CFG){
+  global $DB;
+    $name=$postvars['peer_name'];
+  $cmid=$postvars['cm_id'];
+  $userid=$postvars['user_id'];
+  $response=array();
+
+     /* check if the previous document is submitted */
+  $chek_sub="select * from peer_reviews where user_id=$userid and cm_id=$cmid";
+  if(mysql_num_rows(mysql_query($chek_sub))==0)
+  {
+    $response['type']='error';
+    $response['message']= 'Please sumbit a doc for review';
+    echo json_encode($response);
+    die();
+  }
+  /*end of check of previous document */
+
+  /*check if previous review is complete or not */
+    $chek_req="select * from peer_user_requests where userid=$userid and cmid=$cmid";
+  $qry_req=mysql_query($chek_req);
+  while($row=mysql_fetch_array($qry_req))
+  {
+     $previous_state=$row['state'];
+    if($previous_state=='requested')
+    {
+      $response['type']='error';
+    $response['message']= 'Please complete the previous review before requesting';
+    echo json_encode($response);
+    die();
+    }
+
+  }
+  /*end of check */
+  /*check if user has completed his 4 reviews */
+      $check_num="select * from peer_user_requests where userid=$userid and cmid=$cmid and state='reviewed'";
+     $run_num=mysql_query($check_num);
+      $reviews_completed=mysql_num_rows($run_num);
+     if(mysql_num_rows($run_num)>=5)
+     {
+      $response['type']='error';
+    $response['message']= 'You have completed your 4 reviews !';
+    echo json_encode($response);
+    die();
+
+     }
+  /*end of check */
+    
+
+    /* check user can review real documents */
+   /* check if user has done more than 3 reviews */
+     
+     if($reviews_completed>=3)
+     {
+      $get_req="select * from rfr1 wehre userid!=$userid limit 1";
+      $run_get=mysql_query($get_req);
+      if(mysql_num_rows($run_get)>0)
+      {
+
+      }
+      else
+      {
+      $get_req="select * from rfr0 wehre userid!=$userid limit 1";
+      $run_get=mysql_query($get_req);
+      if(mysql_num_rows($run_get)>0)
+      {
+
+      }
+      else
+      {
+         $get_req="select * from rfr2 wehre userid!=$userid limit 1";
+      $run_get=mysql_query($get_req);
+      if(mysql_num_rows($run_get)>0)
+      {
+
+      }
+      else
+      {
+          $get_req="select * from rfr3 wehre userid!=$userid limit 1";
+      $run_get=mysql_query($get_req);
+      if(mysql_num_rows($run_get)>0)
+      {
+
+      }
+      else
+      {
+          $get_req="select * from rfr4 wehre userid!=$userid limit 1";
+      $run_get=mysql_query($get_req);
+      if(mysql_num_rows($run_get)>0)
+      {
+
+      }
+      else
+      {
+        /*get from sdfr */
+        
+      }
+        
+      }
+
+      }
+      }
+
+
+      }
+
+     } 
+     else
+     {
+
+     }
+   /* end */      
+
+    /*end of check for real documents */
+     else
+    /* standardised docs*/
+    {
+
+    $standard_docs_exist=0;
+        $id=$cmid;
+        $cm         = get_coursemodule_from_id('peer', $id, 0, false, MUST_EXIST);
+    $peer  = $DB->get_record('peer', array('id' => $cm->instance), '*', MUST_EXIST);
+    
+        $standard_docs=$peer->standarddocs;
+          $get_docs="select * from peer_user_standarddocs where userid=$userid and cmid=$cmid";
+         $run_docs=mysql_query($get_docs);
+         if(mysql_num_rows($run_docs)>0)
+         {
+           $standard_docs_exist=1;
+           while($rows=mysql_fetch_array($run_docs)){
+           $standard_docs=$rows['standarddocs'];  
+          }
+           
+         }
+        
+
+       
+          $standard_docs=explode(',',$standard_docs);
+          //print_r($standard_docs);
+          $first_ele = array_shift($standard_docs);
+          $response['type']="success";
+
+          $response['message']=$first_ele;
+      
+          array_push($standard_docs,$first_ele);
+           $user_sdocs=implode(', ', $standard_docs);
+
+
+
+           $qry="insert into peer_user_requests (userid,cmid,state,userdoc) values ($userid,$cmid,'requested','$first_ele')";
+          mysql_query($qry);
+          
+           
+           
+          if($standard_docs_exist==0)
+          {
+            $qry="insert into peer_user_standarddocs (userid,cmid,standarddocs) values ($userid,$cmid,'$user_sdocs')";
+          mysql_query($qry);
+          }else
+          {
+           $qry="update peer_user_standarddocs set standarddocs='$user_sdocs' where userid=$userid and cmid=$cmid";
+            mysql_query($qry);
+          }
+            echo json_encode($response);
+    } 
+
+}
+
+
+
+
+function submit_peer($postvars,$USER,$CFG){
+global $DB;
+    $peer_url=$postvars['peer_url'];
+  $cmid=$postvars['cm_id'];
+  $userid=$postvars['user_id'];
+  $requestedid=$postvars['request_id'];
+  $response=array();
+
+   $qry_up="update peer_user_requests set state='reviewed' where id=$requestedid";
+  mysql_query($qry_up);
+  
+    
+     /*get user peer*/
+      $qry_get="select * from peer_reviews where user_id=$userid and cm_id=$cmid";
+      $run_get=mysql_query($qry_get);
+      while($row=mysql_fetch_array($run_get))
+      {
+         $upid=$row['id'];
+         $ugurl=$row['google_url'];
+      }
+     /*end*/
+      $update_queue="insert into peers_queue (peer_id,userid,cmid,url) values ($upid,$userid,$cmid,'$ugurl')";
+    mysql_query($update_queue);
+    $response['type']='success';
+  $response['message']='updated';
+  echo json_encode($response);
+
+   /* check peer completion for users */
+      $check_r_done="select * from peer_user_requests where userid=$userid and cmid=$cmid and state='reviewed'";
+      $run_r=mysql_query($check_r_done);
+      if(mysql_num_rows($run_r)>=4)
+      {
+        echo 'user has done 4 reviews';
+
+      echo  $qry_checkif="select pr.id from peers_queue pq join peer_user_requests pr on pr.peer_id=pq.peer_id where pr.userid=$userid and pr.cmid=$cmid and pr.state='reviewed' group by pr.id";
+        $run_checkif=mysql_query($qry_checkif);
+        if(mysql_num_rows($run_checkif)>=3)
+        {
+          echo 'peer complete';
+        }
+      }
+
+
+   /* end of check */
+}
+?>
+
+database 
+
+
+
+
+delete from peer_user_requests;
+delete from peer_reviews;
+delete from peer_user_standarddocs;
+delete from rfr0;
+delete from rfr1;
+delete from rfr2;
+delete from rfr3;
+delete from rfr4;
